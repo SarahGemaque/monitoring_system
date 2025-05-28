@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dados dos Sensores</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Dados dos Sensores</h1>
+
+    <!-- Lista simples dos dados -->
+    <ul id="listaDados"></ul>
+
+    <!-- Gráficos -->
+    <canvas id="graficoTemperatura" width="400" height="200"></canvas>
+    <canvas id="graficoUmidade" width="400" height="200"></canvas>
+    <canvas id="graficoLux" width="400" height="200"></canvas>
+
+    <script>
+        // Configura os gráficos inicialmente vazios
+        const ctxTemp = document.getElementById('graficoTemperatura').getContext('2d');
+        const graficoTemperatura = new Chart(ctxTemp, {
+            type: 'line',
+            data: { labels: [], datasets: [{
+                label: 'Temperatura (°C)',
+                data: [],
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1,
+                fill: false
+            }]},
+            options: { responsive: true, scales: { y: { beginAtZero: false }}}
+        });
+
+        const ctxUmid = document.getElementById('graficoUmidade').getContext('2d');
+        const graficoUmidade = new Chart(ctxUmid, {
+            type: 'line',
+            data: { labels: [], datasets: [{
+                label: 'Umidade (%)',
+                data: [],
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                fill: false
+            }]},
+            options: { responsive: true, scales: { y: { beginAtZero: false }}}
+        });
+
+        const ctxLux = document.getElementById('graficoLux').getContext('2d');
+        const graficoLux = new Chart(ctxLux, {
+            type: 'line',
+            data: { labels: [], datasets: [{
+                label: 'Lux',
+                data: [],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+                fill: false
+            }]},
+            options: { responsive: true, scales: { y: { beginAtZero: false }}}
+        });
+
+        // Função para buscar os dados da API e atualizar tudo
+        async function atualizarDados() {
+            try {
+                const response = await fetch('/api/dados');
+                const dados = await response.json();
+
+                // Atualizar lista textual
+                const lista = document.getElementById('listaDados');
+                lista.innerHTML = '';
+                dados.forEach(row => {
+                    const li = document.createElement('li');
+                    li.textContent = `Data: ${row.data_hora} — Temp: ${row.temperatura} °C, Umidade: ${row.umidade} %, Lux: ${row.lux}`;
+                    lista.appendChild(li);
+                });
+
+                // Extrair arrays para os gráficos
+                const labels = dados.map(d => d.data_hora).reverse();
+                const temperaturas = dados.map(d => d.temperatura).reverse();
+                const umidades = dados.map(d => d.umidade).reverse();
+                const luxes = dados.map(d => d.lux).reverse();
+
+                // Atualizar gráficos
+                graficoTemperatura.data.labels = labels;
+                graficoTemperatura.data.datasets[0].data = temperaturas;
+                graficoTemperatura.update();
+
+                graficoUmidade.data.labels = labels;
+                graficoUmidade.data.datasets[0].data = umidades;
+                graficoUmidade.update();
+
+                graficoLux.data.labels = labels;
+                graficoLux.data.datasets[0].data = luxes;
+                graficoLux.update();
+
+            } catch (error) {
+                console.error('Erro ao atualizar dados:', error);
+            }
+        }
+
+        // Atualiza a cada 5 segundos
+        atualizarDados(); // primeira chamada imediata
+        setInterval(atualizarDados, 5000);
+    </script>
+</body>
+</html>

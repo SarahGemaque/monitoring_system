@@ -1,0 +1,27 @@
+{
+  "name": "projeto_web",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@serialport/parser-readline": "^13.0.0",
+    "axios": "^1.9.0",
+    "chart.js": "^4.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "luxon": "^3.6.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^3.11.4",
+    "serialport": "^13.0.0",
+    "socket.io": "^4.8.1",
+    "ws": "^8.18.1"
+  },
+  "description": ""
+}

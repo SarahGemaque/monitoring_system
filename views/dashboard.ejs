@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard - Dados dos Sensores</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/processing.js/1.4.8/processing.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #003366;
+      color: white;
+      padding: 40px;
+      text-align: center;
+      font-size: 40px;
+      font-weight: bold;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    header img {
+      width: 120px;
+      vertical-align: middle;
+      margin: 0 10px;
+    }
+    .info-box {
+      text-align: center;
+      background-color: white;
+      padding: 20px;
+      margin: 20px auto;
+      width: 80%;
+      max-width: 600px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .info-box .photo img {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      margin-bottom: 20px;
+      object-fit: cover;
+    }
+    .info-box h2 {
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    .info-box p {
+      font-size: 18px;
+      color: #555;
+    }
+    .section-title {
+      text-align: center;
+      font-size: 28px;
+      color: #333;
+      margin-top: 20px;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin: 20px auto;
+      max-width: 1200px;
+    }
+    .chart-box {
+      width: 45%;
+      min-width: 300px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+    }
+    .chart-title {
+      font-size: 24px;
+      color: #444;
+      margin-bottom: 10px;
+    }
+    #processingCanvas {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #ccc;
+    }
+    @media (max-width: 768px) {
+      .chart-box {
+        width: 90%;
+      }
+      header {
+        font-size: 30px;
+        padding: 30px;
+      }
+      header img {
+        width: 100px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/images/monitoramento.png" alt="Ícone de monitoramento" />
+    Monitoramento do quarto da Sarah
+    <img src="/images/pc.png" alt="Ícone de computador" />
+  </header>
+
+  <div class="section-title">
+    <h2>Último acesso</h2>
+  </div>
+
+  <div class="info-box">
+    <% if (dados) { %>
+      <div class="photo">
+        <img
+          src="<%= dados.foto %>"
+          alt="Foto de <%= dados.nome %>"
+          onerror="this.onerror=null; this.src='/images/user_default.png';"
+        />
+      </div>
+      <h2><%= dados.nome %></h2>
+      <p><strong>UID:</strong> <%= dados.uid %></p>
+      <p><strong>Status:</strong> <%= dados.status %></p>
+      <p><strong>Data/Hora:</strong> <%= dados.data_hora %></p>
+    <% } else { %>
+      <p>Nenhum acesso registrado.</p>
+    <% } %>
+  </div>
+
+  <div class="container">
+    <div class="chart-box">
+      <div class="chart-title">Temperatura (°C)</div>
+      <canvas id="graficoTemperatura"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Umidade (%)</div>
+      <canvas id="graficoUmidade"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Lux</div>
+      <canvas id="graficoLux"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Radar Processing</div>
+      <canvas
+        id="processingCanvas"
+        data-processing-sources="/radar_com_arduino.pde"
+      ></canvas>
+    </div>
+  </div>
+
+  <script>
+    // Variáveis globais para os gráficos
+    let chartTemperatura, chartUmidade, chartLux;
+
+    // Função para criar ou atualizar gráfico
+    function criarOuAtualizarGrafico(chart, ctx, label, data, cor, unidade) {
+      if (chart) {
+        chart.data.labels = data.labels;
+        chart.data.datasets[0].data = data.values;
+        chart.update();
+      } else {
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                data: data.values,
+                borderColor: cor,
+                borderWidth: 2,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              title: { display: true, text: label },
+            },
+            scales: {
+              x: { title: { display: true, text: 'Data/Hora' } },
+              y: { title: { display: true, text: unidade }, beginAtZero: false },
+            },
+          },
+        });
+      }
+      return chart;
+    }
+
+    // Função para buscar dados da API e atualizar gráficos
+    function atualizarDados() {
+      fetch('/api/dados')
+        .then((response) => response.json())
+        .then((dados) => {
+          const labels = dados.map((item) => item.data_hora);
+          const temperaturas = dados.map((item) => item.temperatura);
+          const umidades = dados.map((item) => item.umidade);
+          const lux = dados.map((item) => item.lux);
+
+          chartTemperatura = criarOuAtualizarGrafico(
+            chartTemperatura,
+            document.getElementById('graficoTemperatura').getContext('2d'),
+            'Temperatura (°C)',
+            { labels, values: temperaturas },
+            'rgba(255, 99, 132, 1)',
+            '°C'
+          );
+
+          chartUmidade = criarOuAtualizarGrafico(
+            chartUmidade,
+            document.getElementById('graficoUmidade').getContext('2d'),
+            'Umidade (%)',
+            { labels, values: umidades },
+            'rgba(54, 162, 235, 1)',
+            '%'
+          );
+
+          chartLux = criarOuAtualizarGrafico(
+            chartLux,
+            document.getElementById('graficoLux').getContext('2d'),
+            'Lux',
+            { labels, values: lux },
+            'rgba(75, 192, 192, 1)',
+            'Lux'
+          );
+        })
+        .catch((error) => console.error('Erro ao obter dados:', error));
+    }
+
+    // Inicializa e atualiza a cada 5 minutos (300000 ms)
+    atualizarDados();
+    setInterval(atualizarDados, 300000);
+
+    // WebSocket para radar (se necessário)
+    window.sensorAngle = 0;
+    window.sensorDistance = 0;
+
+    const socket = new WebSocket(`ws://${window.location.host}`);
+    socket.addEventListener('open', () => {
+      console.log('Conectado ao WebSocket do servidor');
+    });
+    socket.addEventListener('message', (event) => {
+      const partes = event.data.trim().split(',');
+      if (partes.length === 2) {
+        window.sensorAngle = parseInt(partes[0]);
+        window.sensorDistance = parseInt(partes[1]);
+      }
+    });
+    socket.addEventListener('close', () => {
+      console.log('Conexão WebSocket fechada');
+    });
+  </script>
+</body>
+</html>
