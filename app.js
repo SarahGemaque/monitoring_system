@@ -6,26 +6,15 @@ const http = require('http');
 const socketIo = require('socket.io');
 const bodyParser = require('body-parser');
 const WebSocket = require('ws');
-const { SerialPort } = require('serialport');
-const { ReadlineParser } = require('@serialport/parser-readline');
-
-const SERIAL_PORT = 'COM5'; // Ajuste para sua porta COM
-const BAUD_RATE = 9600;     // Deve bater com Serial.begin()
-
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
-const wss = new WebSocket.Server({ server });
-
-// Configuração do banco de dados
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'Teddyana21452668!',
-  database: 'projeto_arduino'
-};
 const { DateTime } = require("luxon");
 
+// Configuração do banco de dados (puxe do .env)
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
+};
 
 let db;
 async function connectToDatabase() {
@@ -38,6 +27,11 @@ async function connectToDatabase() {
   }
 }
 connectToDatabase();
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
+const wss = new WebSocket.Server({ server });
 
 // Middleware
 app.use(cors());
@@ -55,10 +49,10 @@ app.get('/', (req, res) => {
 app.get('/dashboard', async (req, res) => {
   try {
     if (!db) throw new Error('Conexão com o banco de dados não está disponível.');
-    const [results] = await db.query(
-      `SELECT nome, uid, status, foto, DATE_FORMAT(data_hora, '%Y-%m-%d %H:%i:%s') AS data_hora
-       FROM acessos ORDER BY id DESC LIMIT 1`
-    );
+    const [results] = await db.query(`
+      SELECT nome, uid, status, foto, DATE_FORMAT(data_hora, '%Y-%m-%d %H:%i:%s') AS data_hora
+      FROM acessos ORDER BY id DESC LIMIT 1
+    `);
     res.render('dashboard', { dados: results[0] || null });
   } catch (err) {
     console.error('❌ Erro na consulta SQL:', err);
@@ -68,26 +62,25 @@ app.get('/dashboard', async (req, res) => {
 
 // API de dados dos sensores
 app.get('/api/dados', async (req, res) => {
-    try {
-      if (!db) throw new Error('Conexão com o banco de dados não está disponível.');
-      const [results] = await db.query(`
-        SELECT temperatura, umidade, lux, data_hora FROM (
-          SELECT id, temperatura, umidade, lux, DATE_FORMAT(data_hora, "%Y-%m-%d %H:%i:%s") AS data_hora
-          FROM sensores
-          ORDER BY id DESC
-          LIMIT 50
-        ) sub
-        ORDER BY id ASC;
-      `);
-      res.json(results);
-    } catch (err) {
-      console.error('❌ Erro na consulta SQL:', err);
-      res.status(500).json({ erro: 'Erro ao acessar os dados.' });
-    }
-  });
-  
+  try {
+    if (!db) throw new Error('Conexão com o banco de dados não está disponível.');
+    const [results] = await db.query(`
+      SELECT temperatura, umidade, lux, data_hora FROM (
+        SELECT id, temperatura, umidade, lux, DATE_FORMAT(data_hora, "%Y-%m-%d %H:%i:%s") AS data_hora
+        FROM sensores
+        ORDER BY id DESC
+        LIMIT 50
+      ) sub
+      ORDER BY id ASC
+    `);
+    res.json(results);
+  } catch (err) {
+    console.error('❌ Erro na consulta SQL:', err);
+    res.status(500).json({ erro: 'Erro ao acessar os dados.' });
+  }
+});
 
-// Salvar dados dos sensores (POST externo)
+// Salvar dados dos sensores
 app.post('/salvar-sensor', async (req, res) => {
   try {
     const { temperatura, umidade, lux } = req.body;
@@ -95,7 +88,6 @@ app.post('/salvar-sensor', async (req, res) => {
       return res.status(400).json({ erro: '❌ Dados incompletos' });
     }
     const data_hora = DateTime.now().setZone('America/Manaus').toFormat('yyyy-MM-dd HH:mm:ss');
-
 
     await db.query(
       `INSERT INTO sensores (temperatura, umidade, lux, data_hora)
@@ -114,10 +106,10 @@ app.post('/salvar-sensor', async (req, res) => {
 app.get('/ultimo-acesso', async (req, res) => {
   try {
     if (!db) throw new Error('Conexão com o banco de dados não está disponível.');
-    const [results] = await db.query(
-      `SELECT nome, uid, status, data_hora, foto
-       FROM acessos ORDER BY id DESC LIMIT 1`
-    );
+    const [results] = await db.query(`
+      SELECT nome, uid, status, data_hora, foto
+      FROM acessos ORDER BY id DESC LIMIT 1
+    `);
     res.json(results[0] || { mensagem: 'Nenhum acesso encontrado' });
   } catch (err) {
     console.error('❌ Erro ao buscar o último acesso:', err);
@@ -133,7 +125,6 @@ async function registrarAcesso(nome, uid, status, foto) {
     if (!nome || !uid || !status || !foto) return;
     const data_hora = DateTime.now().setZone('America/Manaus').toFormat('yyyy-MM-dd HH:mm:ss');
 
-
     await db.query(
       `INSERT INTO acessos (nome, uid, status, foto, data_hora)
        VALUES (?, ?, ?, ?, ?)`,
@@ -145,37 +136,6 @@ async function registrarAcesso(nome, uid, status, foto) {
   }
 }
 
-// Bloco de leitura da Serial do Arduino (agora com JSON)
-const arduinoPort = new SerialPort({ path: SERIAL_PORT, baudRate: BAUD_RATE });
-const arduinoParser = arduinoPort.pipe(new ReadlineParser({ delimiter: '\n' }));
-
-arduinoPort.on('open', () => console.log(`📡 Serial aberta em ${SERIAL_PORT}@${BAUD_RATE}`));
-arduinoParser.on('data', async (line) => {
-  const trimmed = line.trim();
-  try {
-    const dados = JSON.parse(trimmed);
-    const { temperatura, umidade, lux } = dados;
-    if (
-      typeof temperatura !== 'number' ||
-      typeof umidade !== 'number' ||
-      typeof lux !== 'number'
-    ) {
-      console.warn('⚠️ Dados inválidos recebidos da serial:', dados);
-      return;
-    }
-    const data_hora = DateTime.now().setZone('America/Manaus').toFormat('yyyy-MM-dd HH:mm:ss');
-
-    await db.query(
-      `INSERT INTO sensores (temperatura, umidade, lux, data_hora)
-       VALUES (?, ?, ?, ?)`,
-      [temperatura, umidade, lux, data_hora]
-    );
-    console.log(`✅ Inserido via Serial: T=${temperatura}, U=${umidade}, LUX=${lux}`);
-  } catch (err) {
-    console.warn('⚠️ Formato inválido na serial:', trimmed);
-  }
-});
-
 // Iniciar servidor
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 Servidor rodando em http://localhost:${PORT}`));
