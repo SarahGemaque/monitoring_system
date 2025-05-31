@@ -8,6 +8,8 @@ const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const { DateTime } = require("luxon");
 
+require('dotenv').config();
+
 // Configuração do banco de dados (puxe do .env)
 const dbConfig = {
   host: process.env.DB_HOST,
