@@ -11,6 +11,7 @@
   "dependencies": {
     "@serialport/parser-readline": "^13.0.0",
     "axios": "^1.9.0",
+    "body-parser": "^2.2.0",
     "chart.js": "^4.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
@@ -18,9 +19,10 @@
     "express": "^4.21.2",
     "luxon": "^3.6.1",
     "mysql": "^2.18.1",
-    "mysql2": "^3.11.4",
+    "mysql2": "^3.14.1",
+    "pg": "^8.16.0",
     "socket.io": "^4.8.1",
-    "ws": "^8.18.1"
+    "ws": "^8.18.2"
   },
   "description": ""
 }
